@@ -288,30 +288,29 @@ class DebugInfo(object):
 	def __del__(self) -> None:
 		core.BNFreeDebugInfoReference(self.handle)
 
-	def get_parsers(self):
+	def get_parsers(self) -> List[str]:
+		"""Kept for backward compatibility. Use ``parsers`` property instead."""
 		return self.parsers
 
 	@property
-	def parsers(self):
+	def parsers(self) -> List[str]:
 		count = ctypes.c_ulonglong()
 		parsers = core.BNGetDebugParserNames(self.handle, count)
-
-		result = []
-		for i in range(count.value):
+		try:
 			assert parsers is not None, "core.BNGetDebugParserNames returned None"
-			result.append(parsers[i].decode("utf-8"))
-		core.BNFreeStringList(parsers, count.value)
+			result.append(parsers[i].encode("utf-8"))
+		finally:
+			core.BNFreeStringList(parsers, count.value)
 
-		return result
 
 	def types_from_parser(self, name: Optional[str] = None) -> Iterator[Tuple[str, _types.Type]]:
 		"""Returns a generator of all types provided by a named DebugInfoParser"""
 		count = ctypes.c_ulonglong(0)
 		name_and_types = core.BNGetDebugTypes(self.handle, name, count)
-		assert name_and_types is not None, "core.BNGetDebugTypes returned None"
 		try:
+			assert name_and_types is not None, "core.BNGetDebugTypes returned None"
 			for i in range(0, count.value):
-				yield (name_and_types[i].name, _types.Type(core.BNNewTypeReference(name_and_types[i].type)))
+				yield (name_and_types[i].name, _types.Type.create(core.BNNewTypeReference(name_and_types[i].type)))
 		finally:
 			core.BNFreeDebugTypes(name_and_types, count.value)
 
@@ -324,8 +323,8 @@ class DebugInfo(object):
 		"""Returns a generator of all functions provided by a named DebugInfoParser"""
 		count = ctypes.c_ulonglong(0)
 		functions = core.BNGetDebugFunctions(self.handle, name, count)
-		assert functions is not None, "core.BNGetDebugFunctions returned None"
 		try:
+			assert functions is not None, "core.BNGetDebugFunctions returned None"
 			for i in range(0, count.value):
 
 				if functions[i].type:
@@ -354,12 +353,12 @@ class DebugInfo(object):
 		"""Returns a generator of all data variables provided by a named DebugInfoParser"""
 		count = ctypes.c_ulonglong(0)
 		data_variables = core.BNGetDebugDataVariables(self.handle, name, count)
-		assert data_variables is not None, "core.BNGetDebugDataVariables returned None"
 		try:
+			assert data_variables is not None, "core.BNGetDebugDataVariables returned None"
 			for i in range(0, count.value):
 				yield binaryview.DataVariableAndName(
 				    data_variables[i].address,
-				    _types.Type(
+				    _types.Type.create(
 				        core.BNNewTypeReference(data_variables[i].type), confidence=data_variables[i].typeConfidence
 				    ), data_variables[i].name, data_variables[i].autoDiscovered
 				)
@@ -374,20 +373,20 @@ class DebugInfo(object):
 	def get_type_by_name(self, parser_name: str, name: str) -> Optional[_types.Type]:
 		result = core.BNGetDebugTypeByName(self.handle, parser_name, name)
 		if result is not None:
-			return _types.Type(result)
+			return _types.Type.create(result)
 		return None
 
 	def get_data_variable_by_name(self, parser_name: str, name: str) -> Optional[Tuple[int, _types.Type]]:
 		result = core.BNGetDebugDataVariableByName(self.handle, parser_name, name)
 		if result is not None:
 			core.BNFreeString(result.name)
-			return (result.address, _types.Type(result.type))
+			return (result.address, _types.Type.create(result.type))
 		return None
 
 	def get_data_variable_by_address(self, parser_name: str, address: int) -> Optional[Tuple[str, _types.Type]]:
 		name_and_var = core.BNGetDebugDataVariableByAddress(self.handle, parser_name, address)
 		if name_and_var is not None:
-			result = (str(name_and_var.name), _types.Type(name_and_var.type))
+			result = (str(name_and_var.name), _types.Type.create(name_and_var.type))
 			core.BNFreeString(name_and_var.name)
 			return result
 		return None
@@ -396,46 +395,46 @@ class DebugInfo(object):
 		""" The first element in the Tuple returned in the list is the name of the debug info parser the type came from """
 		count = ctypes.c_ulonglong()
 		names_and_types = core.BNGetDebugTypesByName(self.handle, name, count)
-
-		result = []
-		for i in range(count.value):
-			assert names_and_types is not None, "core.BNGetDebugTypesByName returned None"
-			result.append((names_and_types[i].name, _types.Type(core.BNNewTypeReference(names_and_types[i].type))))
-
-		core.BNFreeNameAndTypeList(names_and_types, count.value)
-		return result
+		try:
+			result = []
+			for i in range(count.value):
+				assert names_and_types is not None, "core.BNGetDebugTypesByName returned None"
+				result.append((names_and_types[i].name, _types.Type.create(core.BNNewTypeReference(names_and_types[i].type))))
+			return result
+		finally:
+			core.BNFreeNameAndTypeList(names_and_types, count.value)
 
 	def get_data_variables_by_name(self, name: str) -> List[Tuple[str, _types.Type]]:
 		"""	The values in the tuples returned in the list is (DebugInfoParserName, address, type) """
 		count = ctypes.c_ulonglong()
 		variables_and_name = core.BNGetDebugDataVariablesByName(self.handle, name, count)
-
-		result = []
-		for i in range(count.value):
-			assert variables_and_name is not None, "core.BNGetDebugDataVariablesByName returned None"
-			result.append((
-			    variables_and_name[i].name, variables_and_name[i].address,
-			    _types.Type(core.BNNewTypeReference(variables_and_name[i].type))
-			))
-
-		core.BNFreeDataVariablesAndName(variables_and_name, count.value)
-		return result
+		try:
+			result = []
+			for i in range(count.value):
+				assert variables_and_name is not None, "core.BNGetDebugDataVariablesByName returned None"
+				result.append((
+					variables_and_name[i].name, variables_and_name[i].address,
+					_types.Type.create(core.BNNewTypeReference(variables_and_name[i].type))
+				))
+			return result
+		finally:
+			core.BNFreeDataVariablesAndName(variables_and_name, count.value)
 
 	def get_data_variables_by_address(self, address: int) -> List[Tuple[str, _types.Type]]:
 		"""	The values in the tuples returned in the list is (DebugInfoParserName, TypeName, type) """
 		count = ctypes.c_ulonglong()
 		variables_and_name = core.BNGetDebugDataVariablesByAddress(self.handle, address, count)
-
-		result = []
-		for i in range(count.value):
-			assert variables_and_name is not None, "core.BNGetDebugDataVariablesByAddress returned None"
-			result.append((
-			    variables_and_name[i].parser, variables_and_name[i].name,
-			    _types.Type(core.BNNewTypeReference(variables_and_name[i].type))
-			))
-
-		core.BNFreeDataVariableAndNameAndDebugParserList(variables_and_name, count.value)
-		return result
+		try:
+			result = []
+			for i in range(count.value):
+				assert variables_and_name is not None, "core.BNGetDebugDataVariablesByAddress returned None"
+				result.append((
+					variables_and_name[i].parser, variables_and_name[i].name,
+					_types.Type.create(core.BNNewTypeReference(variables_and_name[i].type))
+				))
+			return result
+		finally:
+			core.BNFreeDataVariableAndNameAndDebugParserList(variables_and_name, count.value)
 
 	def remove_parser_info(self, parser_name: str):
 		return core.BNRemoveDebugParserInfo(self.handle, parser_name)

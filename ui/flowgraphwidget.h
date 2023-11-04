@@ -98,8 +98,6 @@ class BINARYNINJAUIAPI FlowGraphWidget :
 	BinaryNinja::AdvancedFunctionAnalysisDataRequestor m_advancedAnalysisData;
 	View* m_navigationTarget;
 
-	bool m_developerMode;
-
 	bool m_ready;
 	QTimer* m_loadingTimer;
 	QTimer* m_zoomTimer;
@@ -208,6 +206,8 @@ class BINARYNINJAUIAPI FlowGraphWidget :
 	uint64_t getTokenAddress();
 
 	bool isFunctionHeader();
+
+	bool m_enableBlockIndicators = false;
 
   public:
 	FlowGraphWidget(QWidget* parent, BinaryViewRef view, FlowGraphRef graph = FlowGraphRef());

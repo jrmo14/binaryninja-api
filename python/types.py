@@ -1411,7 +1411,7 @@ class StructureBuilder(TypeBuilder):
 			return None
 		try:
 			return StructureMember(
-			    Type(core.BNNewTypeReference(member.contents.type), confidence=member.contents.typeConfidence),
+			    Type.create(core.BNNewTypeReference(member.contents.type), confidence=member.contents.typeConfidence),
 			    member.contents.name, member.contents.offset, MemberAccess(member.contents.access),
 			    MemberScope(member.contents.scope)
 			)
@@ -1638,6 +1638,9 @@ class NamedTypeReferenceBuilder(TypeBuilder):
 	    platform: Optional['_platform.Platform'] = None, confidence: int = core.max_confidence,
 	    const: BoolWithConfidenceType = False, volatile: BoolWithConfidenceType = False
 	) -> 'NamedTypeReferenceBuilder':
+
+		if not isinstance(type_class, NamedTypeReferenceClass):
+			raise ValueError("named_type_class must be a NamedTypeReferenceClass")
 		ntr_builder_handle = core.BNCreateNamedTypeBuilder(type_class, type_id, QualifiedName(name)._to_core_struct())
 		assert ntr_builder_handle is not None, "core.BNCreateNamedTypeBuilder returned None"
 
@@ -1754,6 +1757,8 @@ class Type:
 	"""
 	def __init__(self, handle, platform: Optional['_platform.Platform'] = None, confidence: int = core.max_confidence):
 		assert isinstance(handle.contents, core.BNType), "Attempting to create mutable Type"
+		if self.__class__ == Type:
+			raise Exception("Cannot instantiate Type directly use Type.create instead")
 		self._handle = handle
 		self._confidence = confidence
 		self._platform = platform
@@ -2082,18 +2087,29 @@ class Type:
 		assert name is not None
 		return MutableTypeBuilder(type.mutable_copy(), bv, name, platform, confidence)
 
-	def with_replaced_structure(self, from_struct, to_struct):
-		handle = core.BNTypeWithReplacedStructure(self._handle, from_struct.handle, to_struct.handle)
+	def with_replaced_structure(self, from_struct: 'StructureType', to_struct: 'StructureType'):
+		if not isinstance(from_struct, StructureType):
+			raise ValueError("from_struct must be a StructureType")
+		if not isinstance(to_struct, StructureType):
+			raise ValueError("to_struct must be a StructureType")
+		handle = core.BNTypeWithReplacedStructure(self._handle, from_struct.ntr_handle, to_struct.ntr_handle)
 		return Type.create(handle)
 
-	def with_replaced_enumeration(self, from_enum, to_enum):
-		handle = core.BNTypeWithReplacedEnumeration(self._handle, from_enum.handle, to_enum.handle)
+	def with_replaced_enumeration(self, from_enum: 'EnumerationType', to_enum: 'EnumerationType'):
+		if not isinstance(from_enum, EnumerationType):
+			raise ValueError("from_enum must be an EnumerationType")
+		if not isinstance(to_enum, EnumerationType):
+			raise ValueError("to_enum must be an EnumerationType")
+		handle = core.BNTypeWithReplacedEnumeration(self._handle, from_enum.ntr_handle, to_enum.ntr_handle)
 		return Type.create(handle)
 
-	def with_replaced_named_type_reference(self, from_ref, to_ref):
-		return Type.create(
-		    handle=core.BNTypeWithReplacedNamedTypeReference(self._handle, from_ref.handle, to_ref.handle)
-		)
+	def with_replaced_named_type_reference(self, from_ref: 'NamedTypeReferenceType', to_ref: 'NamedTypeReferenceType'):
+		if not isinstance(from_ref, NamedTypeReferenceType):
+			raise ValueError("from_ref must be a NamedTypeReferenceType")
+		if not isinstance(to_ref, NamedTypeReferenceType):
+			raise ValueError("to_ref must be a NamedTypeReferenceType")
+		handle=core.BNTypeWithReplacedNamedTypeReference(self._handle, from_ref.ntr_handle, to_ref.ntr_handle)
+		return Type.create(handle)
 
 	@staticmethod
 	def void() -> 'VoidType':
@@ -2573,18 +2589,18 @@ class StructureType(Type):
 		return result
 
 	def with_replaced_structure(self, from_struct, to_struct) -> 'StructureType':
-		return StructureType(
+		return StructureType.from_core_struct(
 		    core.BNStructureWithReplacedStructure(self.struct_handle, from_struct.handle, to_struct.handle)
 		)
 
 	def with_replaced_enumeration(self, from_enum, to_enum) -> 'StructureType':
-		return StructureType(
+		return StructureType.from_core_struct(
 		    core.BNStructureWithReplacedEnumeration(self.struct_handle, from_enum.handle, to_enum.handle)
 		)
 
 	def with_replaced_named_type_reference(self, from_ref, to_ref) -> 'StructureType':
-		return StructureType(
-		    core.BNStructureWithReplacedNamedTypeReference(self.struct_handle, from_ref.handle, to_ref.handle)
+		return StructureType.from_core_struct(
+		    core.BNStructureWithReplacedNamedTypeReference(self.struct_handle, from_ref.ntr_handle, to_ref.ntr_handle)
 		)
 
 	def generate_named_type_reference(self, guid: str, name: QualifiedNameType):
@@ -2948,10 +2964,11 @@ class NamedTypeReferenceType(Type):
 	    width: int = 0, platform: Optional['_platform.Platform'] = None, confidence: int = core.max_confidence,
 	    const: BoolWithConfidenceType = False, volatile: BoolWithConfidenceType = False
 	) -> 'NamedTypeReferenceType':
+		if not isinstance(named_type_class, NamedTypeReferenceClass):
+			raise ValueError("named_type_class must be a NamedTypeReferenceClass")
 		_guid = guid
 		if guid is None:
 			_guid = str(uuid.uuid4())
-
 		_name = QualifiedName(name)._to_core_struct()
 		core_ntr = core.BNCreateNamedType(named_type_class, _guid, _name)
 		assert core_ntr is not None, "core.BNCreateNamedType returned None"
