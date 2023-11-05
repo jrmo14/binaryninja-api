@@ -1388,6 +1388,15 @@ impl Variable {
 }
 
 ///////////////
+// SSAVariable
+
+#[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
+pub struct SSAVariable {
+    pub var: Variable,
+    pub version: usize,
+}
+
+///////////////
 // NamedVariable
 
 pub struct NamedTypedVariable {
